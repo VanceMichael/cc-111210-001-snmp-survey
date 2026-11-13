@@ -17,8 +17,10 @@ npm start
 
 ## 接口与模块
 
-`GET /health` 查看状态，`GET /inspect` 查看来源，`GET /receive?key=sample` 保存单次接收，`GET /receipts/sample` 读取回执。相同key和相同内容可重复接收，不同内容拒绝覆盖。
+`GET /health` 查看状态，`GET /inspect` 单次查看来源响应（保留用途），`GET /receive?key=sample` 保存单次接收，`GET /receipts/sample` 读取回执。相同key和相同内容可重复接收，不同内容拒绝覆盖。
 
-`src/connector.mjs` 解释单次来源响应，`fixtures/source.mjs` 提供可重复启动的本地来源，`src/service.mjs` 组织访问入口，`src/store.mjs` 保存查看结果。`test/connector.test.mjs` 验证协议原语和演练源，`test/service.test.mjs` 验证服务与留存边界。
+`GET /collect` 采集整张管理表并输出设备清单：每个列根独立按词典序推进，行身份取完整 OID 后缀（复合索引不拆分），不按返回位置拼接。清单中每个单元格带来源（请求序号、网关调用号、启动标识），缺失单元格标注 `missing` 并经全量重读确认；`scan` 段说明扫描一致性（启动标识、尝试次数、列结束方式、复核结果）。网关限制响应大小时按 `limit` 分页；扫描期间增删接口或设备重启时按有边界重读处理，仍不稳定则返回 `incomplete` 与明确原因，不用无限重试换取成功。再次调用 `/collect` 会与上一份清单比对：稳定接口按后缀对齐，计数器差值按位宽处理回绕，设备重启后差值置空，新增与移除接口单独列出。进程在列与列之间停止时进度保存在 `scan-state.json`，下次调用续采；暂停期间设备重启则丢弃旧进度，不混用两次启动的数据。可用 `limit`、`maxAttempts` 查询参数调整分页与重读边界。
+
+`src/connector.mjs` 解释单次来源响应，`src/walk.mjs` 逐列采集并组装整表，`src/diff.mjs` 比对两轮清单，`fixtures/source.mjs` 提供可重复启动的本地来源（含稀疏表、拓扑变化、设备重启、计数器回绕演练端点），`src/service.mjs` 组织访问入口，`src/store.mjs` 保存查看结果、设备清单与续采状态。`test/connector.test.mjs` 验证协议原语和演练源，`test/walk.test.mjs` 与 `test/diff.test.mjs` 验证整表采集与差异解释，`test/service.test.mjs` 验证服务与留存边界。
 
 生产接入地址与凭据需由部署配置给出；演练客户端拒绝访问回环以外的地址。文档中的接口不向外提供任意目标代理。异常以明确错误响应返回，接收失败不覆盖原回执。
